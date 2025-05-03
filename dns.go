@@ -28,13 +28,13 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 		log.Fatal(err)
 	}
 
-	AAAA, foundAAAA := findRecord(records, "AAAA", "www")
+	AAAA, foundAAAA := findRecord(records, "AAAA", "@")
 	if !foundAAAA {
-		return errors.New("www AAAA record not found")
+		return errors.New("@ AAAA record not found")
 	}
-	A, foundA := findRecord(records, "A", "www")
+	A, foundA := findRecord(records, "A", "@")
 	if !foundA {
-		return errors.New("www A record not found")
+		return errors.New("@ A record not found")
 	}
 
 	AAAA.TTL = 60
