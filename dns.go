@@ -36,15 +36,23 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	if !foundA {
 		return errors.New("@ A record not found")
 	}
-
-	AAAA.TTL = 60
-	AAAA.Value = ipv6
-	A.TTL = 60
-	A.Value = ipv4
 	
-	slog.Info("updating dns records", "ipv4", ipv4, "ipv6", ipv6)
+	recordsToPatch := make([]hetzner.Record, 0)
+	if ipv6 != "" {
+		AAAA.TTL = 60
+		AAAA.Value = ipv6
+		recordsToPatch = append(recordsToPatch, AAAA)
+	}
+	
+	if ipv4 != "" {
+		AAAA.TTL = 60
+		AAAA.Value = ipv4
+		recordsToPatch = append(recordsToPatch, A)
+	}
 
-	for _, r := range []hetzner.Record{A, AAAA} {
+
+	for _, r := range recordsToPatch {		
+	    slog.Info("updating dns record", "type", r.Type, "value", r.Value)
 		err = service.HetznerClient.UpdateRecord(r)
 		if err != nil {
 			return err

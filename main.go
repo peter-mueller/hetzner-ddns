@@ -16,7 +16,7 @@ type server struct {
 
 func main() {
 	l := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
+		AddSource: false,
 	}))
 	slog.SetDefault(l)
 
