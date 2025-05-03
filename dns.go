@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"log"
-
+	"log/slog"
 	"git.p3r.dev/hetzner-ddns/hetzner"
 )
 
@@ -41,6 +41,8 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	AAAA.Value = ipv6
 	A.TTL = 60
 	A.Value = ipv4
+	
+	slog.Info("updating dns records", "ipv4", ipv4, "ipv6", ipv6)
 
 	for _, r := range []hetzner.Record{A, AAAA} {
 		err = service.HetznerClient.UpdateRecord(r)

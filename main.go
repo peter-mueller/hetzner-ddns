@@ -15,6 +15,12 @@ type server struct {
 }
 
 func main() {
+	l := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+	}))
+	slog.SetDefault(l)
+
+
 	var s server
 	port, ok := lookupEnvInt("HETZNERDDNS_PORT")
 	if ok {
