@@ -5,6 +5,9 @@ import (
 	"log"
 	"log/slog"
 	"git.p3r.dev/hetzner-ddns/hetzner"
+	
+	"fmt"
+	
 )
 
 type DNSService struct {
@@ -28,26 +31,35 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 		log.Fatal(err)
 	}
 
-	AAAA, foundAAAA := findRecord(records, "AAAA", "@")
-	if !foundAAAA {
-		return errors.New("@ AAAA record not found")
-	}
-	A, foundA := findRecord(records, "A", "@")
-	if !foundA {
-		return errors.New("@ A record not found")
-	}
+
+	AAAA, err := mustRecord(records, "AAAA", "@")
+	err = errors.Join(err, err)
+	AAAAWildcard, err := mustRecord(records, "AAAA", "*")
+	err = errors.Join(err, err)
+	A, err := mustRecord(records, "A", "@")
+	err = errors.Join(err, err)
+	AWildcard, err := mustRecord(records, "A", "*")
+	err = errors.Join(err, err)
 	
 	recordsToPatch := make([]hetzner.Record, 0)
 	if ipv6 != "" {
 		AAAA.TTL = 60
 		AAAA.Value = ipv6
 		recordsToPatch = append(recordsToPatch, AAAA)
+		
+		AAAAWildcard.TTL = 60
+		AAAAWildcard.Value = ipv6
+		recordsToPatch = append(recordsToPatch, AAAAWildcard) 
 	}
 	
 	if ipv4 != "" {
 		AAAA.TTL = 60
 		AAAA.Value = ipv4
 		recordsToPatch = append(recordsToPatch, A)
+		
+		AWildcard.TTL = 60
+		AWildcard.Value = ipv4
+		recordsToPatch = append(recordsToPatch, AWildcard) 
 	}
 
 
@@ -62,7 +74,7 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	return nil
 }
 
-func findRecord(records []hetzner.Record, recordType string, name string) (r hetzner.Record, found bool) {
+func mustRecord(records []hetzner.Record, recordType string, name string) (r hetzner.Record, err error) {
 	for _, r := range records {
 		if r.Type != recordType {
 			continue
@@ -70,7 +82,7 @@ func findRecord(records []hetzner.Record, recordType string, name string) (r het
 		if r.Name != name {
 			continue
 		}
-		return r, true
+		return r, nil
 	}
-	return r, false
+	return r, fmt.Errorf("record with type %s and name %s not found", recordType, name)
 }
