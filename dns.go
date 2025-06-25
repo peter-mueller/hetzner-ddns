@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"log"
 	"log/slog"
 	"git.p3r.dev/hetzner-ddns/hetzner"
 	
@@ -28,7 +27,7 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 
 	records, err := service.HetznerClient.GetAllRecords()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 
@@ -53,8 +52,8 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	}
 	
 	if ipv4 != "" {
-		AAAA.TTL = 60
-		AAAA.Value = ipv4
+		A.TTL = 60
+		A.Value = ipv4
 		recordsToPatch = append(recordsToPatch, A)
 		
 		AWildcard.TTL = 60
