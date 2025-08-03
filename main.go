@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"net/netip"
 )
 
 type server struct {
@@ -41,9 +42,30 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 	var (
 		token = query.Get("token")
 		ipv4  = query.Get("ipv4")
-		ipv6  = query.Get("ipv6")
+		ipv6prefix  = query.Get("ipv6prefix")
+		ipv6instance = query.Get("ipv6instance")
 	)
-	err := s.dnsService.UpdateDomain(token, ipv4, ipv6)
+
+
+	prefix, err := netip.ParsePrefix(ipv6prefix)
+	if err != nil {
+		slog.Error("bad ipv6prefix", "ipv6prefix", ipv6prefix)
+		http.Error(w, "bad ipv6prefix", 400)
+		return
+	}
+	addr16 := prefix.Addr().As16()
+	instance, err := netip.ParseAddr(ipv6instance)
+	if err != nil {
+		slog.Error("bad ipv6instance", "ipv6instance", ipv6instance)
+		http.Error(w, "bad ipv6instance", 400)
+		return
+	}
+	instance16 := instance.As16()
+	copy(addr16[8:], instance16[8:])
+	ipv6 := netip.AddrFrom16(addr16).String()
+
+
+	err = s.dnsService.UpdateDomain(token, ipv4, ipv6)
 
 	switch {
 	case errors.Is(err, ErrBadToken):
