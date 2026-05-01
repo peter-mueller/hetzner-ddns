@@ -14,22 +14,37 @@ import (
 
 type DNSService struct {
 	HetznerClient *hcloud.Client
+	Zone          string
 	Token         string
 }
 
-func NewDNSService(token string) (*DNSService, error) {
+func NewDNSService(token string, hetznerCloudToken string, zone string) (*DNSService, error) {
 	if token == "" {
 		return nil, ErrNoToken
 	}
+	if hetznerCloudToken == "" {
+		return nil, ErrNoHetznerCloudToken
+	}
+	if zone == "" {
+		return nil, ErrNoZone
+	}
 
 	s := new(DNSService)
+	s.Zone = zone
+	s.Token = token
 	s.HetznerClient = hcloud.NewClient(
-		hcloud.WithToken(token),
+		hcloud.WithToken(hetznerCloudToken),
 	)
 	return s, nil
 }
 
 var ErrNoToken = errors.New("no token")
+var ErrNoZone = errors.New("no zone")
+
+var ErrNoHetznerCloudToken = errors.New("no hetzner api token")
+
+var ErrBadToken = errors.New("bad token")
+
 var DefaultTTL = new(60)
 
 const (
@@ -59,7 +74,14 @@ func recordsValueString(records []hcloud.ZoneRRSetRecord) string {
 	return b.String()
 }
 
-func (service *DNSService) UpdateDomain(zoneName string, ipv4 string, ipv6 string) error {
+func (service *DNSService) UpdateDomain(token string, zoneName string, ipv4 string, ipv6 string) error {
+	if token == "" {
+		return ErrNoToken
+	}
+	if token != service.Token {
+		return ErrBadToken
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

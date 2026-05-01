@@ -29,7 +29,9 @@ func main() {
 	}
 
 	token := os.Getenv("HETZNERDDNS_TOKEN")
-	dnsService, err := NewDNSService(token)
+	hetznerApiToken := os.Getenv("HETZNERDDNS_HETZNER_TOKEN")
+	zone := os.Getenv("HETZNERDDNS_ZONE")
+	dnsService, err := NewDNSService(token, hetznerApiToken, zone)
 	if err != nil {
 		slog.Error("failed to init DNSService", "err", err)
 		os.Exit(1)
@@ -66,7 +68,7 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 	copy(addr16[8:], instance16[8:])
 	ipv6 := netip.AddrFrom16(addr16).String()
 
-	err = s.dnsService.UpdateDomain(token, ipv4, ipv6)
+	err = s.dnsService.UpdateDomain(token, "p3r.dev", ipv4, ipv6)
 
 	if err != nil {
 		slog.Error("interal error", "err", err.Error())
