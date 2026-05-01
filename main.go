@@ -1,18 +1,17 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"strconv"
-	"net/netip"
 )
 
 type server struct {
 	port       int
-	dnsService DNSService
+	dnsService *DNSService
 }
 
 func main() {
@@ -20,7 +19,6 @@ func main() {
 		AddSource: false,
 	}))
 	slog.SetDefault(l)
-
 
 	var s server
 	port, ok := lookupEnvInt("HETZNERDDNS_PORT")
@@ -30,8 +28,13 @@ func main() {
 		s.port = 8080
 	}
 
-	s.dnsService.Token = os.Getenv("HETZNERDDNS_TOKEN")
-	s.dnsService.HetznerClient.AuthAPIToken = os.Getenv("HETZNERDDNS_HETZNER_TOKEN")
+	token := os.Getenv("HETZNERDDNS_TOKEN")
+	dnsService, err := NewDNSService(token)
+	if err != nil {
+		slog.Error("failed to init DNSService", "err", err)
+		os.Exit(1)
+	}
+	s.dnsService = dnsService
 
 	http.HandleFunc("GET /update", s.update)
 	http.ListenAndServe(":"+strconv.Itoa(s.port), nil)
@@ -40,12 +43,11 @@ func main() {
 func (s *server) update(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var (
-		token = query.Get("token")
-		ipv4  = query.Get("ipv4")
-		ipv6prefix  = query.Get("ipv6prefix")
+		token        = query.Get("token")
+		ipv4         = query.Get("ipv4")
+		ipv6prefix   = query.Get("ipv6prefix")
 		ipv6instance = query.Get("ipv6instance")
 	)
-
 
 	prefix, err := netip.ParsePrefix(ipv6prefix)
 	if err != nil {
@@ -64,19 +66,9 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 	copy(addr16[8:], instance16[8:])
 	ipv6 := netip.AddrFrom16(addr16).String()
 
-
 	err = s.dnsService.UpdateDomain(token, ipv4, ipv6)
 
-	switch {
-	case errors.Is(err, ErrBadToken):
-		slog.Info("unauthorized", "err", err.Error())
-		http.Error(w, "bad token", http.StatusUnauthorized)
-		return
-	case errors.Is(err, ErrNoToken):
-		slog.Info("unauthorized", "err", err.Error())
-		http.Error(w, "no token", http.StatusUnauthorized)
-		return
-	case err != nil:
+	if err != nil {
 		slog.Error("interal error", "err", err.Error())
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

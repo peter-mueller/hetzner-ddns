@@ -1,70 +1,115 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log/slog"
-	"git.p3r.dev/hetzner-ddns/hetzner"
-	
+	"strings"
+	"time"
+
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
+
 	"fmt"
-	
 )
 
 type DNSService struct {
-	HetznerClient hetzner.Client
+	HetznerClient *hcloud.Client
 	Token         string
 }
 
-var ErrNoToken = errors.New("no token")
-var ErrBadToken = errors.New("bad token")
-
-func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) error {
+func NewDNSService(token string) (*DNSService, error) {
 	if token == "" {
-		return ErrNoToken
-	}
-	if token != service.Token {
-		return ErrBadToken
+		return nil, ErrNoToken
 	}
 
-	records, err := service.HetznerClient.GetAllRecords()
+	s := new(DNSService)
+	s.HetznerClient = hcloud.NewClient(
+		hcloud.WithToken(token),
+	)
+	return s, nil
+}
+
+var ErrNoToken = errors.New("no token")
+var DefaultTTL = new(60)
+
+const (
+	TypeAAAA = hcloud.ZoneRRSetTypeAAAA
+	TypeA    = hcloud.ZoneRRSetTypeA
+)
+
+func singleRecord(value string) []hcloud.ZoneRRSetRecord {
+	return []hcloud.ZoneRRSetRecord{
+		{
+			Value: value,
+		},
+	}
+}
+
+func recordsValueString(records []hcloud.ZoneRRSetRecord) string {
+	var b strings.Builder
+
+	b.WriteString("(")
+	for i, r := range records {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(r.Value)
+	}
+	b.WriteString(")")
+	return b.String()
+}
+
+func (service *DNSService) UpdateDomain(zoneName string, ipv4 string, ipv6 string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	zone := &hcloud.Zone{
+		Name: zoneName,
+	}
+	records, _, err := service.HetznerClient.Zone.ListRRSets(ctx, zone, hcloud.ZoneRRSetListOpts{})
 	if err != nil {
 		return err
 	}
 
+	AAAA, rerr := mustRecord(records, TypeAAAA, "@")
+	err = errors.Join(err, rerr)
+	AAAAWildcard, rerr := mustRecord(records, TypeAAAA, "*")
+	err = errors.Join(err, rerr)
+	A, rerr := mustRecord(records, TypeA, "@")
+	err = errors.Join(err, rerr)
+	AWildcard, rerr := mustRecord(records, TypeA, "*")
+	err = errors.Join(err, rerr)
 
-	AAAA, err := mustRecord(records, "AAAA", "@")
-	err = errors.Join(err, err)
-	AAAAWildcard, err := mustRecord(records, "AAAA", "*")
-	err = errors.Join(err, err)
-	A, err := mustRecord(records, "A", "@")
-	err = errors.Join(err, err)
-	AWildcard, err := mustRecord(records, "A", "*")
-	err = errors.Join(err, err)
-	
-	recordsToPatch := make([]hetzner.Record, 0)
+	if err != nil {
+		slog.Error("failed to find records", "err", err)
+	}
+
+	recordsToPatch := make([]*hcloud.ZoneRRSet, 0)
 	if ipv6 != "" {
-		AAAA.TTL = 60
-		AAAA.Value = ipv6
+		AAAA.TTL = DefaultTTL
+		AAAA.Records = singleRecord(ipv6)
 		recordsToPatch = append(recordsToPatch, AAAA)
-		
-		AAAAWildcard.TTL = 60
-		AAAAWildcard.Value = ipv6
-		recordsToPatch = append(recordsToPatch, AAAAWildcard) 
+
+		AAAAWildcard.TTL = DefaultTTL
+		AAAAWildcard.Records = singleRecord(ipv6)
+
+		recordsToPatch = append(recordsToPatch, AAAAWildcard)
 	}
-	
+
 	if ipv4 != "" {
-		A.TTL = 60
-		A.Value = ipv4
+		A.TTL = DefaultTTL
+		A.Records = singleRecord(ipv4)
 		recordsToPatch = append(recordsToPatch, A)
-		
-		AWildcard.TTL = 60
-		AWildcard.Value = ipv4
-		recordsToPatch = append(recordsToPatch, AWildcard) 
+
+		AWildcard.TTL = DefaultTTL
+		AWildcard.Records = singleRecord(ipv4)
+		recordsToPatch = append(recordsToPatch, AWildcard)
 	}
 
+	for _, r := range recordsToPatch {
+		slog.Info("updating dns record", "type", r.Type, "value", recordsValueString(r.Records))
 
-	for _, r := range recordsToPatch {		
-	    slog.Info("updating dns record", "type", r.Type, "value", r.Value)
-		err = service.HetznerClient.UpdateRecord(r)
+		_, _, err := service.HetznerClient.Zone.UpdateRRSet(ctx, r, hcloud.ZoneRRSetUpdateOpts{})
 		if err != nil {
 			return err
 		}
@@ -73,7 +118,8 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	return nil
 }
 
-func mustRecord(records []hetzner.Record, recordType string, name string) (r hetzner.Record, err error) {
+func mustRecord(records []*hcloud.ZoneRRSet, recordType hcloud.ZoneRRSetType, name string) (r *hcloud.ZoneRRSet, err error) {
+
 	for _, r := range records {
 		if r.Type != recordType {
 			continue
