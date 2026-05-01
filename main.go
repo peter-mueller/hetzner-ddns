@@ -68,7 +68,7 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 	copy(addr16[8:], instance16[8:])
 	ipv6 := netip.AddrFrom16(addr16).String()
 
-	err = s.dnsService.UpdateDomain(token, "p3r.dev", ipv4, ipv6)
+	err = s.dnsService.UpdateDomain(token, ipv4, ipv6)
 
 	if err != nil {
 		slog.Error("interal error", "err", err.Error())

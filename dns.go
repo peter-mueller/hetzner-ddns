@@ -55,7 +55,8 @@ const (
 func singleRecord(value string) []hcloud.ZoneRRSetRecord {
 	return []hcloud.ZoneRRSetRecord{
 		{
-			Value: value,
+			Value:   value,
+			Comment: "set by hetzner-ddns DynDNS service",
 		},
 	}
 }
@@ -74,7 +75,7 @@ func recordsValueString(records []hcloud.ZoneRRSetRecord) string {
 	return b.String()
 }
 
-func (service *DNSService) UpdateDomain(token string, zoneName string, ipv4 string, ipv6 string) error {
+func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) error {
 	if token == "" {
 		return ErrNoToken
 	}
@@ -86,7 +87,7 @@ func (service *DNSService) UpdateDomain(token string, zoneName string, ipv4 stri
 	defer cancel()
 
 	zone := &hcloud.Zone{
-		Name: zoneName,
+		Name: service.Zone,
 	}
 	records, _, err := service.HetznerClient.Zone.ListRRSets(ctx, zone, hcloud.ZoneRRSetListOpts{})
 	if err != nil {
