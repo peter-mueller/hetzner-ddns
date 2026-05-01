@@ -132,7 +132,8 @@ func (service *DNSService) UpdateDomain(token string, ipv4 string, ipv6 string) 
 	for _, r := range recordsToPatch {
 		slog.Info("updating dns record", "type", r.Type, "value", recordsValueString(r.Records))
 
-		_, _, err := service.HetznerClient.Zone.UpdateRRSet(ctx, r, hcloud.ZoneRRSetUpdateOpts{})
+		_, res, err := service.HetznerClient.Zone.UpdateRRSet(ctx, r, hcloud.ZoneRRSetUpdateOpts{})
+		slog.Info("updating dns record response", "status", res.Status)
 		if err != nil {
 			return err
 		}
